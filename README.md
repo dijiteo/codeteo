@@ -36,7 +36,7 @@ npm.cmd run dist:win
 
 The Windows installer is written to `release/` as `CodeTeo-<version>-Setup.exe`. It is an x64 NSIS installer. Future versions are distributed through the public GitHub Releases page at https://github.com/dijiteo/codeteo.
 
-Installed builds can check for updates from the top toolbar, download a new release, and restart to install it. Release builds are published from GitHub Actions when a `v*` tag is pushed; see [docs/RELEASES.md](docs/RELEASES.md).
+Installed builds can check for updates from the top toolbar, download a new release, and restart to install it. See [docs/RELEASES.md](docs/RELEASES.md) to publish future versions from Windows.
 
 ## Phase 1 features
 
