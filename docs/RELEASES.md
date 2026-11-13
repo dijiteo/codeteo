@@ -1,0 +1,20 @@
+# CodeTeo releases
+
+CodeTeo checks GitHub Releases for updates only in an installed, packaged Windows build. The development build shows that updates are available from an installed build.
+
+## Create a Windows release
+
+1. Update `version` in `package.json` to a new, higher semantic version. Keep `package-lock.json` in sync with `npm.cmd install --package-lock-only`.
+2. Commit and push the source to `dijiteo/codeteo`.
+3. From a Windows machine with Node.js installed and GitHub CLI authenticated to the `dijiteo` account, run `npm.cmd run release:win`.
+4. Confirm the GitHub release contains the `CodeTeo-<version>-Setup.exe` installer, `latest.yml`, and the `.blockmap` file before announcing it.
+5. Install the release once and check that the toolbar can find the release. Publish a later version to verify the download and restart flow.
+
+The release workflow uploads assets to the public GitHub Releases feed used by the built-in updater. Do not upload `.env` files, keys, credentials, user data, or local build output to the source repository.
+
+## Update behavior
+
+- Users choose when to download an available update.
+- The app offers to restart and install after the download completes.
+- Installation is blocked while editor changes are unsaved.
+- Version metadata and installer assets are served by GitHub Releases over HTTPS. Configure Windows code signing before distributing broadly; this project currently builds unsigned installers.
