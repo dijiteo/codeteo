@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronRight, FileCode2, FilePlus2, Folder, FolderOpen, FolderPlus, RefreshCw } from 'lucide-react'
 import type { WorkspaceEntry } from '@shared/contracts'
+import { localizeError } from '../localize'
 
 interface WorkspaceExplorerProps {
   rootPath: string
@@ -31,8 +32,7 @@ function isSameOrInside(path: string, ancestor: string): boolean {
 }
 
 function errorMessage(cause: unknown, fallback: string): string {
-  if (!(cause instanceof Error)) return fallback
-  return cause.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  return localizeError(cause, fallback)
 }
 
 export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, onEntryRenamed, onEntryDeleted }: WorkspaceExplorerProps) {
@@ -53,7 +53,7 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
       setChildren((current) => ({ ...current, [relativePath]: entries }))
       return true
     } catch (cause) {
-      if (relativePath === '') setProblem(errorMessage(cause, 'Could not load this folder.'))
+      if (relativePath === '') setProblem(errorMessage(cause, 'Bu klasör yüklenemedi.'))
       return false
     } finally {
       setLoading((current) => {
@@ -138,8 +138,8 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
 
   const deleteEntry = async (entry: WorkspaceEntry) => {
     setMenu(null)
-    const label = entry.type === 'directory' ? 'folder' : 'file'
-    if (!window.confirm(`Move the ${label} "${entry.name}" to the Recycle Bin?\nOpen editor tabs for it will be closed.`)) return
+    const label = entry.type === 'directory' ? 'klasör' : 'dosya'
+    if (!window.confirm(`"${entry.name}" ${label} Geri Dönüşüm Kutusu'na taşınsın mı?\nAçık düzenleyici sekmeleri kapatılacak.`)) return
     try {
       await window.desktop.deleteEntry(entry.path)
       forget(entry.path)
@@ -148,7 +148,7 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
       setProblem('')
       await load(parentOf(entry.path))
     } catch (cause) {
-      setProblem(errorMessage(cause, 'Could not delete this item.'))
+      setProblem(errorMessage(cause, 'Bu öğe silinemedi.'))
     }
   }
 
@@ -182,7 +182,7 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
       setProblem('')
       cancelDraft()
     } catch (cause) {
-      setProblem(errorMessage(cause, 'Could not complete this change.'))
+      setProblem(errorMessage(cause, 'İşlem tamamlanamadı.'))
     } finally {
       submitting.current = false
     }
@@ -214,7 +214,7 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
         autoFocus
         spellCheck={false}
         value={draftName}
-        aria-label={draft?.kind === 'rename' ? 'New name' : type === 'directory' ? 'Folder name' : 'File name'}
+        aria-label={draft?.kind === 'rename' ? 'Yeni ad' : type === 'directory' ? 'Klasör adı' : 'Dosya adı'}
         onChange={(event) => setDraftName(event.target.value)}
         onKeyDown={onDraftKeyDown}
         onBlur={() => void submitDraft()}
@@ -275,15 +275,15 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
   return (
     <aside className="explorer">
       <div className="section-heading">
-        <span>EXPLORER</span>
+        <span>GEZGİN</span>
         <div className="section-actions">
-          <button className="icon-button small" title="New file" onClick={() => void startCreate('file', focused)}>
+          <button className="icon-button small" title="Yeni dosya" onClick={() => void startCreate('file', focused)}>
             <FilePlus2 size={14} />
           </button>
-          <button className="icon-button small" title="New folder" onClick={() => void startCreate('directory', focused)}>
+          <button className="icon-button small" title="Yeni klasör" onClick={() => void startCreate('directory', focused)}>
             <FolderPlus size={14} />
           </button>
-          <button className="icon-button small" title="Refresh files" onClick={() => void refresh()}>
+          <button className="icon-button small" title="Dosyaları yenile" onClick={() => void refresh()}>
             <RefreshCw size={14} />
           </button>
         </div>
@@ -294,7 +294,7 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
       </div>
       <div className="tree-scroll" onContextMenu={(event) => openMenu(event, null)}>
         {problem ? <div className="tree-error" role="alert">{problem}</div> : null}
-        {children[''] ? renderEntries('', 0) : !problem ? <div className="tree-empty">Loading files…</div> : null}
+        {children[''] ? renderEntries('', 0) : !problem ? <div className="tree-empty">Dosyalar yükleniyor…</div> : null}
       </div>
       {menu ? (
         <div
@@ -304,13 +304,13 @@ export default function WorkspaceExplorer({ rootPath, selectedPath, onOpenFile, 
           onContextMenu={(event) => event.preventDefault()}
           role="menu"
         >
-          <button role="menuitem" onClick={() => void startCreate('file', menu.entry)}>New File</button>
-          <button role="menuitem" onClick={() => void startCreate('directory', menu.entry)}>New Folder</button>
+          <button role="menuitem" onClick={() => void startCreate('file', menu.entry)}>Yeni dosya</button>
+          <button role="menuitem" onClick={() => void startCreate('directory', menu.entry)}>Yeni klasör</button>
           {menu.entry ? (
             <>
               <div className="context-menu-separator" />
-              <button role="menuitem" onClick={() => startRename(menu.entry!)}>Rename<span>F2</span></button>
-              <button role="menuitem" className="danger" onClick={() => void deleteEntry(menu.entry!)}>Delete<span>Del</span></button>
+              <button role="menuitem" onClick={() => startRename(menu.entry!)}>Yeniden adlandır<span>F2</span></button>
+              <button role="menuitem" className="danger" onClick={() => void deleteEntry(menu.entry!)}>Sil<span>Del</span></button>
             </>
           ) : null}
         </div>

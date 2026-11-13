@@ -53,7 +53,7 @@ The integrated PowerShell runs with the same Windows permissions as CodeTeo. A u
 
 ## Local history and settings
 
-The SQLite database stores recently opened workspace paths and timestamps, plus non-secret app settings such as the selected AI provider and model, in Electron's user-data folder. It is independent of workspace contents. Uninstall preserves the database by design.
+The SQLite database stores recently opened workspace paths and timestamps, plus non-secret app settings such as the selected AI provider and model, in Electron's user-data folder. Renderer `localStorage` stores non-secret display and editor preferences. Both are independent of workspace contents. Uninstall preserves app data by design.
 
 ## Remaining Agent work
 

@@ -294,7 +294,7 @@ function createMainWindow(): void {
 
 app.whenReady().then(async () => {
   if (process.platform !== 'win32') {
-    dialog.showErrorBox('Windows only', 'CodeTeo is built for Windows.')
+    dialog.showErrorBox('Yalnızca Windows', 'CodeTeo Windows için geliştirilmiştir.')
     app.quit()
     return
   }
@@ -306,7 +306,7 @@ app.whenReady().then(async () => {
       renameSync(previousUserDataDirectory, newUserDataDirectory)
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Could not migrate CodeTeo settings.'
-      dialog.showErrorBox('Settings migration failed', message)
+      dialog.showErrorBox('Ayarlar taşınamadı', message)
       app.quit()
       return
     }
@@ -315,7 +315,7 @@ app.whenReady().then(async () => {
     await initializeDatabase()
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'Could not initialize workspace history.'
-    dialog.showErrorBox('Workspace history unavailable', message)
+    dialog.showErrorBox('Klasör geçmişi kullanılamıyor', message)
     app.quit()
     return
   }

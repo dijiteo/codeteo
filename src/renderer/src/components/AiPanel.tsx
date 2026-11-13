@@ -1,12 +1,15 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Bot, FileCode2, KeyRound, Pencil, RefreshCw, RotateCcw, SendHorizontal, Square, Trash2, X } from 'lucide-react'
 import type { AIModel, ChatContextFile, ChatMessage, ProviderId, ProviderStatus } from '@shared/ai'
+import { localizeError } from '../localize'
 
 interface AiPanelProps {
   visible: boolean
   providers: ProviderStatus[]
   workspacePath: string
   activeFile: ChatContextFile | null
+  defaultAgentMode: boolean
+  defaultAttachFile: boolean
   hasUnsavedChanges: boolean
   onFileChanged(path: string, content: string): void
   onOpenSettings: () => void
@@ -26,11 +29,6 @@ interface ApprovalRequest {
     | { kind: 'run-command'; command: string }
 }
 
-function errorMessage(cause: unknown, fallback: string): string {
-  const message = cause instanceof Error ? cause.message : fallback
-  return message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-}
-
 function MessageBody({ content }: { content: string }) {
   const parts = content.split(/```[^\n]*\n?/)
   return (
@@ -42,7 +40,7 @@ function MessageBody({ content }: { content: string }) {
   )
 }
 
-export default function AiPanel({ visible, providers, workspacePath, activeFile, hasUnsavedChanges, onFileChanged, onOpenSettings, onClose }: AiPanelProps) {
+export default function AiPanel({ visible, providers, workspacePath, activeFile, defaultAgentMode, defaultAttachFile, hasUnsavedChanges, onFileChanged, onOpenSettings, onClose }: AiPanelProps) {
   const configured = providers.filter((provider) => provider.configured)
   const [providerId, setProviderId] = useState<ProviderId | null>(null)
   const [modelId, setModelId] = useState('')
@@ -50,8 +48,8 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
   const [loadingModels, setLoadingModels] = useState(false)
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
-  const [attachFile, setAttachFile] = useState(true)
-  const [agentMode, setAgentMode] = useState(true)
+  const [attachFile, setAttachFile] = useState(defaultAttachFile)
+  const [agentMode, setAgentMode] = useState(defaultAgentMode)
   const [approval, setApproval] = useState<ApprovalRequest | null>(null)
   const [chatId, setChatId] = useState<string | null>(null)
   const [usage, setUsage] = useState<Usage>({ input: 0, output: 0 })
@@ -83,6 +81,9 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
     if (agentMode && selectedProvider && !selectedProvider.supportsAgent) setAgentMode(false)
   }, [agentMode, selectedProvider?.supportsAgent])
 
+  useEffect(() => setAttachFile(defaultAttachFile), [defaultAttachFile])
+  useEffect(() => setAgentMode(defaultAgentMode), [defaultAgentMode])
+
   const loadModels = useCallback(async (id: ProviderId, refresh: boolean) => {
     setLoadingModels(true)
     try {
@@ -101,7 +102,7 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
       setError('')
     } catch (cause) {
       setModels([])
-      setError(errorMessage(cause, 'Could not load models.'))
+      setError(localizeError(cause, 'Modeller yüklenemedi.'))
     } finally {
       setLoadingModels(false)
     }
@@ -124,7 +125,7 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
       onFileChanged(event.path, event.content)
     } else {
       if (event.type === 'error') {
-        let message = event.message
+        let message = localizeError(event.message, 'İstek başarısız oldu.')
         if (providerId === 'gemini' && /HTTP 404|no longer available|not found/i.test(message)) {
           const suggested = message.match(/models\/([a-zA-Z0-9._-]+)/)?.[1]
           const nextModel = models.find((model) => model.id === suggested)?.id ??
@@ -135,7 +136,7 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
           if (nextModel) {
             setModelId(nextModel)
             void window.desktop.setAiSelection({ providerId: 'gemini', modelId: nextModel })
-            message = `That Gemini model is unavailable. Switched to ${nextModel}; retry this prompt.`
+            message = `Bu Gemini modeli kullanılamıyor. ${nextModel} modeline geçildi; isteği yeniden deneyebilirsin.`
           }
         }
         setTurns((current) => current.map((turn, index) => index === current.length - 1 ? { ...turn, error: message } : turn))
@@ -181,7 +182,7 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
     } catch (cause) {
       chatIdRef.current = null
       setChatId(null)
-      setTurns((current) => current.map((turn, index) => index === current.length - 1 ? { ...turn, error: errorMessage(cause, 'The request failed.') } : turn))
+      setTurns((current) => current.map((turn, index) => index === current.length - 1 ? { ...turn, error: localizeError(cause, 'İstek başarısız oldu.') } : turn))
     }
   }
 
@@ -213,7 +214,7 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
     try {
       await window.desktop.respondToAiApproval(pending.chatId, pending.callId, approved)
     } catch (cause) {
-      setError(errorMessage(cause, 'Could not send the approval decision.'))
+      setError(localizeError(cause, 'Onay yanıtı gönderilemedi.'))
     }
   }
 
@@ -234,13 +235,13 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
   }
 
   return (
-    <aside className={`ai-panel ${visible ? '' : 'hidden'}`} aria-label="AI assistant">
+    <aside className={`ai-panel ${visible ? '' : 'hidden'}`} aria-label="Yapay zekâ yardımcısı">
       <div className="section-heading">
-        <span>AI ASSISTANT</span>
+        <span>YAPAY ZEKÂ YARDIMCISI</span>
         <div className="section-actions">
-          <button className="icon-button small" title="New chat" onClick={newChat} disabled={!turns.length}><Trash2 size={14} /></button>
-          <button className="icon-button small" title="AI providers" onClick={onOpenSettings}><KeyRound size={14} /></button>
-          <button className="icon-button small" title="Close AI panel" onClick={onClose}><X size={14} /></button>
+          <button className="icon-button small" title="Yeni sohbet" onClick={newChat} disabled={!turns.length}><Trash2 size={14} /></button>
+          <button className="icon-button small" title="Yapay zekâ sağlayıcıları" onClick={onOpenSettings}><KeyRound size={14} /></button>
+          <button className="icon-button small" title="Yapay zekâ panelini kapat" onClick={onClose}><X size={14} /></button>
         </div>
       </div>
 
@@ -249,19 +250,19 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
           <div className="ai-messages" ref={scrollRef}>
             {turns.length ? turns.map((turn, index) => (
               <div key={turn.id} className={`ai-message ${turn.role}`}>
-                <div className="ai-message-role">{turn.role === 'user' ? 'You' : 'Assistant'}</div>
+                <div className="ai-message-role">{turn.role === 'user' ? 'SEN' : 'ASİSTAN'}</div>
                 <div className="ai-message-body">
                   <MessageBody content={turn.content} />
-                  {turn.role === 'assistant' && chatId && index === turns.length - 1 && !turn.content ? <span className="ai-typing">Thinking…</span> : null}
+                  {turn.role === 'assistant' && chatId && index === turns.length - 1 && !turn.content ? <span className="ai-typing">Yanıt hazırlanıyor…</span> : null}
                 </div>
                 {turn.error ? <div className="ai-message-error">{turn.error}</div> : null}
-                {turn.role === 'user' && !chatId ? <div className="ai-message-actions"><button onClick={() => editPrompt(index)}><Pencil size={12} /> Edit prompt</button></div> : null}
-                {turn.role === 'assistant' && turn.error && !chatId ? <div className="ai-message-actions"><button onClick={() => retryPrompt(index)}><RotateCcw size={12} /> Retry with selected model</button></div> : null}
+                {turn.role === 'user' && !chatId ? <div className="ai-message-actions"><button onClick={() => editPrompt(index)}><Pencil size={12} /> İsteği düzenle</button></div> : null}
+                {turn.role === 'assistant' && turn.error && !chatId ? <div className="ai-message-actions"><button onClick={() => retryPrompt(index)}><RotateCcw size={12} /> Seçili modelle yeniden dene</button></div> : null}
               </div>
             )) : (
               <div className="ai-empty">
                 <Bot size={22} />
-                <p>Ask about your code. Answers stream in from the selected model.</p>
+                <p>Kodun hakkında soru sor. Yanıtlar seçtiğin modelden anlık olarak gelir.</p>
               </div>
             )}
           </div>
@@ -269,40 +270,40 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
           {error ? <div className="ai-error">{error}</div> : null}
 
           {approval ? (
-            <div className="agent-approval" role="dialog" aria-label="Review proposed file edit">
+            <div className="agent-approval" role="dialog" aria-label="Önerilen değişikliği incele">
               {approval.action.kind === 'write-file' ? (
                 <>
-                  <div className="agent-approval-title">Review file replacement</div>
+                  <div className="agent-approval-title">Dosya değişikliğini incele</div>
                   <div className="agent-approval-path">{approval.workspace}\{approval.action.path}</div>
                   <div className="agent-approval-preview">
-                    <details><summary>Current content</summary><pre>{approval.action.before || '(empty file)'}</pre></details>
-                    <details open><summary>Proposed content</summary><pre>{approval.action.after || '(empty file)'}</pre></details>
+                    <details><summary>Mevcut içerik</summary><pre>{approval.action.before || '(boş dosya)'}</pre></details>
+                    <details open><summary>Önerilen içerik</summary><pre>{approval.action.after || '(boş dosya)'}</pre></details>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="agent-approval-title">Review PowerShell command</div>
-                  <div className="agent-approval-path">Working directory: {approval.workspace}</div>
+                  <div className="agent-approval-title">PowerShell komutunu incele</div>
+                  <div className="agent-approval-path">Çalışma klasörü: {approval.workspace}</div>
                   <pre className="agent-command-preview">{approval.action.command}</pre>
                   <p className="agent-approval-warning">Runs as your Windows account. Command output will be sent to {selectedProvider?.name}.</p>
                 </>
               )}
-              {hasUnsavedChanges ? <p className="agent-approval-warning">Save or discard your open editor changes before approving.</p> : null}
+              {hasUnsavedChanges ? <p className="agent-approval-warning">Onaylamadan önce düzenleyicideki değişiklikleri kaydet veya geri al.</p> : null}
               <div className="agent-approval-actions">
-                <button className="toolbar-button" onClick={() => void respondToApproval(false)}>Decline</button>
+                <button className="toolbar-button" onClick={() => void respondToApproval(false)}>Reddet</button>
                 <button className="toolbar-button save-button" disabled={hasUnsavedChanges} onClick={() => void respondToApproval(true)}>
-                  {approval.action.kind === 'write-file' ? 'Approve and save' : 'Approve and run'}
+                  {approval.action.kind === 'write-file' ? 'Onayla ve kaydet' : 'Onayla ve çalıştır'}
                 </button>
               </div>
             </div>
           ) : null}
 
           <div className="ai-composer">
-            {agentMode ? <div className="agent-mode-note"><strong>Workspace access:</strong> {workspacePath.split(/[\\/]/).filter(Boolean).at(-1) ?? workspacePath}. Agent can inspect files in this selected folder. File replacements and PowerShell commands need your approval; it cannot delete or rename files.</div> : null}
+            {agentMode ? <div className="agent-mode-note"><strong>Klasör erişimi:</strong> {workspacePath.split(/[\\/]/).filter(Boolean).at(-1) ?? workspacePath}. Ajan bu klasördeki dosyaları inceleyebilir. Dosya değişiklikleri ve PowerShell komutları için onayın gerekir; dosya silemez veya yeniden adlandıramaz.</div> : null}
             {activeFile ? (
               <label className="ai-attach" title={activeFile.path}>
                 <input type="checkbox" checked={attachFile} onChange={(event) => setAttachFile(event.target.checked)} />
-                <FileCode2 size={13} /><span>Include {activeFile.path}</span>
+                <FileCode2 size={13} /><span>{activeFile.path} dosyasını ekle</span>
               </label>
             ) : null}
             <textarea
@@ -310,40 +311,40 @@ export default function AiPanel({ visible, providers, workspacePath, activeFile,
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="Ask the AI… (Enter to send, Shift+Enter for a new line)"
+              placeholder="Yapay zekâya sor… (Göndermek için Enter, yeni satır için Shift+Enter)"
               rows={3}
             />
             <div className="ai-composer-footer">
-              <span className="ai-usage" title="Tokens used in this chat">
+              <span className="ai-usage" title="Bu sohbette kullanılan belirteçler">
                 {usage.input || usage.output ? `${usage.input.toLocaleString()} in · ${usage.output.toLocaleString()} out` : ''}
               </span>
               {chatId ? (
-                <button className="toolbar-button ai-stop" onClick={stop}><Square size={13} /><span>Stop</span></button>
+                <button className="toolbar-button ai-stop" onClick={stop}><Square size={13} /><span>Durdur</span></button>
               ) : (
                 <button className="toolbar-button save-button" onClick={() => void send()} disabled={!input.trim() || !modelId}>
-                  <SendHorizontal size={14} /><span>Send</span>
+                  <SendHorizontal size={14} /><span>Gönder</span>
                 </button>
               )}
             </div>
-            <div className="ai-model-bar" aria-label="AI model settings">
-              <select value={providerId ?? ''} onChange={(event) => { setProviderId(event.target.value as ProviderId); setModels([]) }} title="Provider">
+            <div className="ai-model-bar" aria-label="Yapay zekâ model ayarları">
+              <select value={providerId ?? ''} onChange={(event) => { setProviderId(event.target.value as ProviderId); setModels([]) }} title="Sağlayıcı">
                 {configured.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
               </select>
-              <select value={agentMode ? 'agent' : 'chat'} onChange={(event) => setAgentMode(event.target.value === 'agent')} disabled={!selectedProvider?.supportsAgent} title="Chat or workspace Agent">
-                <option value="agent">Agent</option><option value="chat">Chat</option>
+              <select value={agentMode ? 'agent' : 'chat'} onChange={(event) => setAgentMode(event.target.value === 'agent')} disabled={!selectedProvider?.supportsAgent} title="Sohbet veya çalışma alanı Ajan modu">
+                <option value="agent">Ajan</option><option value="chat">Sohbet</option>
               </select>
               <select value={modelId} onChange={(event) => selectModel(event.target.value)} disabled={loadingModels || !models.length} title="Model">
-                {models.length ? models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>) : <option value="">{loadingModels ? 'Loading models…' : 'No models'}</option>}
+                {models.length ? models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>) : <option value="">{loadingModels ? 'Modeller yükleniyor…' : 'Model yok'}</option>}
               </select>
-              <button className="icon-button small" title="Refresh models" disabled={!providerId || loadingModels} onClick={() => providerId && void loadModels(providerId, true)}><RefreshCw size={13} className={loadingModels ? 'spinning' : ''} /></button>
+              <button className="icon-button small" title="Modelleri yenile" disabled={!providerId || loadingModels} onClick={() => providerId && void loadModels(providerId, true)}><RefreshCw size={13} className={loadingModels ? 'spinning' : ''} /></button>
             </div>
           </div>
         </>
       ) : (
         <div className="ai-empty ai-setup">
           <Bot size={24} />
-          <p>Connect an AI provider or start the local Kumru server to begin.</p>
-          <button className="primary-action" onClick={onOpenSettings}><KeyRound size={15} /> Add an API key</button>
+          <p>Başlamak için bir yapay zekâ sağlayıcısı bağla veya yerel Kumru sunucusunu çalıştır.</p>
+          <button className="primary-action" onClick={onOpenSettings}><KeyRound size={15} /> API anahtarı ekle</button>
         </div>
       )}
     </aside>

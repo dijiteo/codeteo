@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { localizeError } from '../localize'
 
 interface TerminalPanelProps {
   workspacePath: string
@@ -14,7 +15,7 @@ interface TerminalPanelProps {
 export default function TerminalPanel({ workspacePath, visible, onClose, onRestart, onError }: TerminalPanelProps) {
   const host = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
-  const [status, setStatus] = useState('Starting PowerShell…')
+  const [status, setStatus] = useState('PowerShell başlatılıyor…')
   const [stopped, setStopped] = useState(false)
 
   useEffect(() => {
@@ -75,8 +76,8 @@ export default function TerminalPanel({ workspacePath, visible, onClose, onResta
     })
     const removeExit = window.desktop.onTerminalExit((exit) => {
       if (exit.terminalId !== terminalId) return
-      terminal.write(`\r\n\x1b[90m[PowerShell exited with code ${exit.exitCode}]\x1b[0m\r\n`)
-      setStatus('PowerShell stopped')
+      terminal.write(`\r\n\x1b[90m[PowerShell ${exit.exitCode} koduyla kapandı]\x1b[0m\r\n`)
+      setStatus('PowerShell kapandı')
       setStopped(true)
     })
     const input = terminal.onData((data) => {
@@ -96,8 +97,8 @@ export default function TerminalPanel({ workspacePath, visible, onClose, onResta
         resize()
         terminal.focus()
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Could not start PowerShell.'
-        setStatus('Terminal unavailable')
+        const message = localizeError(cause, 'PowerShell başlatılamadı.')
+        setStatus('Terminal kullanılamıyor')
         setStopped(true)
         onError(message)
         terminal.write(`\x1b[31m${message}\x1b[0m\r\n`)
@@ -122,8 +123,8 @@ export default function TerminalPanel({ workspacePath, visible, onClose, onResta
       <div className="terminal-toolbar">
         <span className="terminal-label"><span className={`terminal-dot ${stopped ? 'stopped' : ''}`} />{status}</span>
         <div className="terminal-actions">
-          <button className="terminal-restart" title="Start a new PowerShell session" onClick={onRestart}>Restart</button>
-          <button className="icon-button small" title="Hide terminal (session keeps running)" onClick={onClose}>×</button>
+          <button className="terminal-restart" title="Yeni PowerShell oturumu başlat" onClick={onRestart}>Yeniden başlat</button>
+          <button className="icon-button small" title="Terminali gizle (oturum çalışmaya devam eder)" onClick={onClose}>×</button>
         </div>
       </div>
       <div className="terminal-host" ref={host} />

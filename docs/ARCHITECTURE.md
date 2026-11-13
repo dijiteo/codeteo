@@ -73,7 +73,7 @@ The user selects a workspace through a native folder picker. The main process st
 
 ## Persistence
 
-Workspace history is app data, not project data. Its database lives under CodeTeo's Windows application data directory. The database contains workspace paths and last-opened timestamps. It must not contain source file contents, credentials, or AI prompts. Phase 1 uses SQLite in WebAssembly (sql.js) and exports the database to disk after each update, so the app does not need a database service or native SQLite compiler toolchain.
+Workspace history is app data, not project data. Its database lives under CodeTeo's Windows application data directory. The database contains workspace paths and last-opened timestamps. It must not contain source file contents, credentials, or AI prompts. Non-secret UI preferences are stored separately in the renderer's local storage. Phase 1 uses SQLite in WebAssembly (sql.js) and exports the database to disk after each update, so the app does not need a database service or native SQLite compiler toolchain.
 
 ## Terminal
 

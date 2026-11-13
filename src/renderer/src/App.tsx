@@ -15,14 +15,19 @@ import {
   PanelLeft,
   Save,
   RotateCw,
+  Settings as SettingsIcon,
   TerminalSquare,
   X,
 } from 'lucide-react'
 import type { ChatContextFile, ProviderStatus } from '@shared/ai'
 import type { AppUpdateState } from '@shared/app-update'
 import type { EditorFile, RecentWorkspace, WorkspaceEntry, WorkspaceGitStatus } from '@shared/contracts'
+import { readPreferences, writePreferences } from '@shared/preferences'
+import type { AppPreferences } from '@shared/preferences'
 import AiPanel from './components/AiPanel'
 import AiSettingsDialog from './components/AiSettingsDialog'
+import SettingsDialog from './components/SettingsDialog'
+import { localizeError } from './localize'
 import CodeEditor from './components/CodeEditor'
 import TerminalPanel from './components/TerminalPanel'
 import WorkspaceExplorer from './components/WorkspaceExplorer'
@@ -49,6 +54,8 @@ export default function App() {
   const [error, setError] = useState('')
   const [aiVisible, setAiVisible] = useState(true)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [preferences, setPreferences] = useState<AppPreferences>(readPreferences)
   const [aiProviders, setAiProviders] = useState<ProviderStatus[]>([])
   const [updateState, setUpdateState] = useState<AppUpdateState>({ status: 'idle' })
 
@@ -62,7 +69,7 @@ export default function App() {
     try {
       setAiProviders(await window.desktop.getAiProviders())
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read AI provider settings.')
+      setError(localizeError(cause, 'Yapay zekâ sağlayıcı ayarları okunamadı.'))
     }
   }, [])
 
@@ -81,16 +88,16 @@ export default function App() {
       else if (updateState.status === 'downloaded') await window.desktop.installAppUpdate()
       else setUpdateState(await window.desktop.checkForAppUpdates())
     } catch (cause) {
-      setUpdateState({ status: 'error', message: cause instanceof Error ? cause.message : 'Update action failed.' })
+      setUpdateState({ status: 'error', message: localizeError(cause, 'Güncelleme işlemi başarısız oldu.') })
     }
   }
 
-  const updateLabel = updateState.status === 'checking' ? 'Checking…'
-    : updateState.status === 'available' ? `Download v${updateState.version}`
-      : updateState.status === 'downloading' ? `Downloading ${updateState.percent}%`
-        : updateState.status === 'downloaded' ? 'Restart to update'
-          : updateState.status === 'not-available' ? 'Up to date'
-            : updateState.status === 'unavailable' ? 'Updates in installed app' : 'Check updates'
+  const updateLabel = updateState.status === 'checking' ? 'Denetleniyor…'
+    : updateState.status === 'available' ? `v${updateState.version} indir`
+      : updateState.status === 'downloading' ? `İndiriliyor: %${updateState.percent}`
+        : updateState.status === 'downloaded' ? 'Güncellemek için yeniden başlat'
+          : updateState.status === 'not-available' ? 'Güncel'
+            : updateState.status === 'unavailable' ? 'Yüklü uygulamada kullanılabilir' : 'Güncellemeleri denetle'
   const hasUnsavedChanges = tabs.some((tab) => tab.dirty)
 
   useEffect(() => {
@@ -98,14 +105,14 @@ export default function App() {
   }, [hasUnsavedChanges])
 
   const confirmDiscardChanges = useCallback(() => (
-    !hasUnsavedChanges || window.confirm('Some files have unsaved changes. Discard them and open another folder?')
-  ), [hasUnsavedChanges])
+    !hasUnsavedChanges || !preferences.confirmBeforeDiscard || window.confirm('Bazı dosyalarda kaydedilmemiş değişiklikler var. Bu değişiklikleri atıp başka bir klasör açılsın mı?')
+  ), [hasUnsavedChanges, preferences.confirmBeforeDiscard])
 
   const refreshRecent = useCallback(async () => {
     try {
       setRecent(await window.desktop.getRecentWorkspaces())
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read workspace history.')
+      setError(localizeError(cause, 'Son açılan klasörler okunamadı.'))
     }
   }, [])
 
@@ -118,7 +125,7 @@ export default function App() {
       setGitStatus(await window.desktop.getGitStatus())
     } catch (cause) {
       setGitStatus(null)
-      setError(cause instanceof Error ? cause.message : 'Could not read Git status.')
+      setError(localizeError(cause, 'Git durumu okunamadı.'))
     }
   }, [])
 
@@ -146,7 +153,7 @@ export default function App() {
         await refreshRecent()
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not open that workspace.')
+      setError(localizeError(cause, 'Klasör açılamadı.'))
     }
   }, [confirmDiscardChanges, refreshRecent, setActiveWorkspace])
 
@@ -157,7 +164,7 @@ export default function App() {
       setActiveWorkspace(opened)
       await refreshRecent()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'That recent workspace is no longer available.')
+      setError(localizeError(cause, 'Bu klasör artık kullanılamıyor.'))
       await refreshRecent()
     }
   }, [confirmDiscardChanges, refreshRecent, setActiveWorkspace])
@@ -197,7 +204,7 @@ export default function App() {
       setActivePath(file.path)
       setError('')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not open this file.')
+      setError(localizeError(cause, 'Dosya açılamadı.'))
     }
   }, [tabs])
 
@@ -211,7 +218,7 @@ export default function App() {
       setError('')
       void refreshGitStatus()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save this file.')
+      setError(localizeError(cause, 'Dosya kaydedilemedi.'))
     }
   }, [activeTab, refreshGitStatus])
 
@@ -236,7 +243,7 @@ export default function App() {
 
   const closeTab = (path: string) => {
     const tab = tabs.find((item) => item.path === path)
-    if (tab?.dirty && !window.confirm(`Discard unsaved changes to ${tab.name}?`)) return
+    if (tab?.dirty && preferences.confirmBeforeDiscard && !window.confirm(`${tab.name} dosyasındaki kaydedilmemiş değişiklikler atılsın mı?`)) return
     const index = tabs.findIndex((item) => item.path === path)
     const nextTabs = tabs.filter((item) => item.path !== path)
     setTabs(nextTabs)
@@ -255,6 +262,11 @@ export default function App() {
     void refreshGitStatus()
   }, [refreshGitStatus])
 
+  const updatePreferences = (next: AppPreferences) => {
+    setPreferences(next)
+    writePreferences(next)
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -264,36 +276,39 @@ export default function App() {
           <div className="topbar-divider" />
           <button className="workspace-picker" onClick={() => void chooseWorkspace()}>
             <FolderOpen size={15} />
-            <span>{workspace ? folderName(workspace) : 'Open workspace'}</span>
+            <span>{workspace ? folderName(workspace) : 'Çalışma alanı aç'}</span>
             {workspace ? <ChevronRight size={13} className="muted-icon" /> : null}
           </button>
         </div>
         <div className="topbar-actions">
           <span className="shortcut-hint"><Command size={12} /> K</span>
-          <button className="toolbar-button" onClick={() => void chooseWorkspace()} title="Open workspace (Ctrl+O)">
-            <FolderOpen size={15} /><span>Open Folder</span>
+          <button className="toolbar-button" onClick={() => void chooseWorkspace()} title="Klasör aç (Ctrl+O)">
+            <FolderOpen size={15} /><span>Klasör aç</span>
           </button>
-          <button className="toolbar-button save-button" onClick={() => void saveActive()} disabled={!activeTab?.dirty} title="Save file (Ctrl+S)">
-            {activeTab?.dirty ? <Save size={15} /> : <Check size={15} />}<span>Save</span>
+          <button className="toolbar-button save-button" onClick={() => void saveActive()} disabled={!activeTab?.dirty} title="Dosyayı kaydet (Ctrl+S)">
+            {activeTab?.dirty ? <Save size={15} /> : <Check size={15} />}<span>Kaydet</span>
           </button>
           <button
             className={`toolbar-button terminal-toggle ${terminalVisible ? 'active' : ''}`}
             onClick={toggleTerminal}
             disabled={!workspace}
-            title="Toggle terminal"
+            title="Terminali aç veya kapat"
           >
             <TerminalSquare size={15} /><span>Terminal</span>
           </button>
-          <button className="toolbar-button" onClick={() => void handleUpdateAction()} disabled={updateState.status === 'checking' || updateState.status === 'downloading' || updateState.status === 'unavailable'} title={updateState.status === 'error' ? updateState.message : 'Check for CodeTeo updates'}>
+          <button className="toolbar-button" onClick={() => void handleUpdateAction()} disabled={updateState.status === 'checking' || updateState.status === 'downloading' || updateState.status === 'unavailable'} title={updateState.status === 'error' ? updateState.message : 'CodeTeo güncellemelerini denetle'}>
             {updateState.status === 'available' || updateState.status === 'downloaded' ? <Download size={14} /> : <RotateCw size={14} className={updateState.status === 'checking' ? 'spinning' : ''} />}
-            <span>{updateState.status === 'error' ? 'Update error' : updateLabel}</span>
+            <span>{updateState.status === 'error' ? 'Güncelleme hatası' : updateLabel}</span>
+          </button>
+          <button className="toolbar-button" onClick={() => setSettingsOpen(true)} title="Ayarlar">
+            <SettingsIcon size={15} /><span>Ayarlar</span>
           </button>
           <button
             className={`toolbar-button ${aiVisible && workspace ? 'active' : ''}`}
             onClick={() => workspace ? setAiVisible((visible) => !visible) : setAiSettingsOpen(true)}
-            title={workspace ? 'Toggle AI assistant (Ctrl+L)' : 'AI providers'}
+            title={workspace ? 'Yapay zekâ yardımcısını aç veya kapat (Ctrl+L)' : 'Yapay zekâ sağlayıcıları'}
           >
-            <Bot size={15} /><span>AI</span>
+            <Bot size={15} /><span>Yapay zekâ</span>
           </button>
         </div>
       </header>
@@ -301,7 +316,7 @@ export default function App() {
       {error ? (
         <div className="error-banner" role="alert">
           <span>{error}</span>
-          <button className="icon-button small" title="Dismiss" onClick={() => setError('')}><X size={14} /></button>
+          <button className="icon-button small" title="Kapat" onClick={() => setError('')}><X size={14} /></button>
         </div>
       ) : null}
 
@@ -322,11 +337,11 @@ export default function App() {
                     <button className="tab-select" onClick={() => setActivePath(tab.path)} title={tab.path}>
                       <FileCode2 size={14} />
                       <span>{tab.name}</span>
-                      {tab.dirty ? <span className="dirty-dot" title="Unsaved changes" /> : null}
+                      {tab.dirty ? <span className="dirty-dot" title="Kaydedilmemiş değişiklikler" /> : null}
                     </button>
-                    <button className="tab-close" onClick={() => closeTab(tab.path)} title={`Close ${tab.name}`}><X size={13} /></button>
+                    <button className="tab-close" onClick={() => closeTab(tab.path)} title={`${tab.name} sekmesini kapat`}><X size={13} /></button>
                   </div>
-                )) : <div className="empty-tabs"><Braces size={14} /><span>Workspace</span></div>}
+                )) : <div className="empty-tabs"><Braces size={14} /><span>Çalışma alanı</span></div>}
                 <div className="tabs-spacer" />
                 {activeTab ? <span className="file-location">{activeTab.path}</span> : null}
               </div>
@@ -336,16 +351,20 @@ export default function App() {
                     key={activeTab.path}
                     value={activeTab.content}
                     language={activeTab.language}
+                    fontSize={preferences.editorFontSize}
+                    tabSize={preferences.tabSize}
+                    wordWrap={preferences.wordWrap}
+                    lineNumbers={preferences.lineNumbers}
                     onChange={(content) => setTabs((current) => current.map((tab) => tab.path === activeTab.path ? { ...tab, content, dirty: content !== tab.savedContent } : tab))}
                   />
                 ) : (
                   <div className="empty-editor">
                     <div className="empty-editor-mark"><Braces size={25} /></div>
                     <h1>{folderName(workspace)}</h1>
-                    <p>Choose a file from the explorer to start editing.</p>
+                    <p>Düzenlemeye başlamak için gezginden bir dosya seç.</p>
                     <div className="empty-shortcuts">
-                      <span><Keyboard size={13} /> Save file <kbd>Ctrl</kbd><b>+</b><kbd>S</kbd></span>
-                      <span><FolderOpen size={13} /> Open folder <kbd>Ctrl</kbd><b>+</b><kbd>O</kbd></span>
+                      <span><Keyboard size={13} /> Kaydet <kbd>Ctrl</kbd><b>+</b><kbd>S</kbd></span>
+                      <span><FolderOpen size={13} /> Klasör aç <kbd>Ctrl</kbd><b>+</b><kbd>O</kbd></span>
                     </div>
                   </div>
                 )}
@@ -366,6 +385,8 @@ export default function App() {
               providers={aiProviders}
               workspacePath={workspace}
               activeFile={aiContextFile}
+              defaultAgentMode={preferences.defaultAiMode === 'agent'}
+              defaultAttachFile={preferences.includeActiveFile}
               hasUnsavedChanges={hasUnsavedChanges}
               onFileChanged={onAgentFileChanged}
               onOpenSettings={() => setAiSettingsOpen(true)}
@@ -376,30 +397,30 @@ export default function App() {
           <section className="welcome-screen">
             <div className="welcome-hero">
               <div className="welcome-logo"><Code2 size={27} /></div>
-              <p className="eyebrow">YOUR WORKSPACE, READY</p>
-              <h1>Build something<br /><span>that matters.</span></h1>
-              <p className="welcome-copy">A calm, focused place to work on your code.</p>
+              <p className="eyebrow">ÇALIŞMA ALANIN HAZIR</p>
+              <h1>Fikirlerini<br /><span>koda dönüştür.</span></h1>
+              <p className="welcome-copy">Kodların için sade ve odaklı bir çalışma alanı.</p>
               <button className="primary-action" onClick={() => void chooseWorkspace()}>
-                <FolderOpen size={16} /> Open a folder <span className="action-shortcut">Ctrl O</span>
+                <FolderOpen size={16} /> Klasör aç <span className="action-shortcut">Ctrl O</span>
               </button>
             </div>
             <div className="welcome-lower">
-              <div className="recent-heading"><span><Clock3 size={14} /> Recent workspaces</span><button onClick={() => void refreshRecent()}>Refresh</button></div>
+              <div className="recent-heading"><span><Clock3 size={14} /> Son açılan klasörler</span><button onClick={() => void refreshRecent()}>Yenile</button></div>
               {recent.length ? (
                 <div className="recent-list">
                   {recent.map((item) => (
                     <button className="recent-item" key={item.path} onClick={() => void openRecentWorkspace(item.path)}>
                       <div className="recent-icon"><FolderOpen size={16} /></div>
                       <div className="recent-details"><strong>{folderName(item.path)}</strong><span>{item.path}</span></div>
-                      <span className="recent-date">{new Date(item.openedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                      <span className="recent-date">{new Date(item.openedAt).toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' })}</span>
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="no-recent">Folders you open will appear here.</div>
+                <div className="no-recent">Açtığın klasörler burada görünür.</div>
               )}
             </div>
-            <div className="welcome-footer"><span><span className="windows-dot" /> Built for Windows</span><span>Phase 2 · AI providers</span></div>
+            <div className="welcome-footer"><span><span className="windows-dot" /> Windows için geliştirildi</span><span>Yapay zekâ destekli kodlama</span></div>
           </section>
         )}
       </div>
@@ -414,11 +435,11 @@ export default function App() {
                 {gitStatus.changedFiles > 0 ? <span className="git-change-count">{gitStatus.changedFiles}</span> : null}
               </span>
             ) : gitStatus?.status === 'not-repository' ? (
-              <span title="This workspace is not a Git repository">No Git</span>
+              <span title="Bu klasör bir Git deposu değil">Git deposu yok</span>
             ) : gitStatus?.status === 'git-unavailable' ? (
-              <span title="Install Git to see repository status">Git unavailable</span>
+              <span title="Depo durumunu görmek için Git'i yükle">Git kullanılamıyor</span>
             ) : null}
-            {activeTab ? <><span>{activeTab.language}</span><span>UTF-8</span>{activeTab.dirty ? <span className="status-unsaved">Unsaved</span> : <span>Saved</span>}</> : <span>Ready</span>}
+            {activeTab ? <><span>{activeTab.language}</span><span>UTF-8</span>{activeTab.dirty ? <span className="status-unsaved">Kaydedilmedi</span> : <span>Kaydedildi</span>}</> : <span>Hazır</span>}
           </div>
         </footer>
       ) : null}
@@ -428,6 +449,14 @@ export default function App() {
           providers={aiProviders}
           onChanged={() => void refreshAiProviders()}
           onClose={() => setAiSettingsOpen(false)}
+        />
+      ) : null}
+      {settingsOpen ? (
+        <SettingsDialog
+          preferences={preferences}
+          onPreferencesChange={updatePreferences}
+          onOpenAiSettings={() => { setSettingsOpen(false); setAiSettingsOpen(true) }}
+          onClose={() => setSettingsOpen(false)}
         />
       ) : null}
     </div>

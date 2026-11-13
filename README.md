@@ -47,6 +47,7 @@ Installed builds can check for updates from the top toolbar, download a new rele
 - UTF-8 text file open and save, including Ctrl+S, with an unsaved-changes prompt on quit
 - PowerShell terminal backed by node-pty and xterm.js; hiding the panel keeps the session running
 - Recent workspace history in a local SQLite database
+- Turkish settings for editor font size, indentation, line wrapping, line numbers, and discard confirmation
 - Context-isolated preload bridge and validated workspace file paths
 
 ## Phase 2 features
@@ -58,6 +59,7 @@ Installed builds can check for updates from the top toolbar, download a new rele
 - Local Kumru-2B chat through an OpenAI-compatible server at `127.0.0.1:8000`
 - Add up to eight OpenAI-compatible providers with a name, base URL, and optional API key; presets cover LM Studio, Ollama, and vLLM/Kumru
 - Reviewed Agent mode for tool-capable OpenAI, Anthropic, Gemini, OpenRouter, and opted-in compatible endpoints: list/read workspace files and propose edits or commands for approval
+- AI preferences for the default Chat/Agent mode and whether to include the active file
 - Agent mode requires approval for each file replacement and PowerShell command. Approved commands run as the current Windows user.
 
 Agent mode reads workspace files and sends their contents to the selected provider. File replacements and command text are shown for review before applying or running them. An approved PowerShell command can make changes available to your Windows account.
